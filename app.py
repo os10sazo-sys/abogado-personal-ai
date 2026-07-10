@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Abogado Personal AI - MVP V2 (Multijurisdiccional)
-Requerimientos: pip install streamlit PyPDF2 openai
+Abogado Personal AI - MVP V2 (Versión Google Gemini)
+Requerimientos: pip install streamlit PyPDF2 google-generativeai
 """
 import streamlit as st
 import PyPDF2
 import io
 import os
-from openai import OpenAI
+import google.generativeai as genai
 
 # Configuración estructural de la UI
 st.set_page_config(
@@ -32,9 +32,9 @@ st.markdown('<div class="sub-title">Analizador de contratos inteligente adaptado
 
 # Panel Lateral de Configuración de Entorno
 st.sidebar.header("Configuración")
-api_key = st.sidebar.text_input("OpenAI API Key", type="password", help="Ingresa tu llave de OpenAI.")
+api_key = st.sidebar.text_input("Gemini API Key", type="password", help="Ingresa tu llave de Google AI Studio.")
 if not api_key:
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = os.environ.get("GEMINI_API_KEY", "")
 
 # Selector Dinámico de Jurisdicción Legal
 jurisdiccion = st.selectbox(
@@ -58,14 +58,15 @@ def extraer_texto_pdf(file_obj):
         return None
 
 def analizar_contrato_multijurisdiccion(texto_legal, region_seleccionada, key):
-    client = OpenAI(api_key=key)
+    # Configuración de las credenciales de Google
+    genai.configure(api_key=key)
     
     # Configuración de los sub-prompts técnicos de acuerdo al territorio
     if "Chile" in region_seleccionada:
         contexto_legal = (
             "Actúa bajo la legislación de CHILE (Ley 19.496 de Protección de los Derechos de los Consumidores). "
             "Enfoque principal: Buscar cláusulas abusivas según los criterios del SERNAC (renovaciones automáticas sin consentimiento explícito, "
-            "eximentes de responsabilidad por fallas del servicio, limitaciones al derecho de retracto, cobros ocultos de comisiones).\n"
+            "eximentes de responsabilidad por fallas del servicio, limitations al derecho de retracto, cobros ocultos de comisiones).\n"
             "En la sección de frases para reclamar, estructura un borrador formal listo para presentar ante el portal de Reclamos de SERNAC."
         )
     elif "Estados Unidos" in region_seleccionada:
@@ -100,24 +101,22 @@ def analizar_contrato_multijurisdiccion(texto_legal, region_seleccionada, key):
     )
     
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": prompt_sistema},
-                {"role": "user", "content": f"Analiza este contrato:\n\n{texto_legal[:12000]}"}
-            ],
-            temperature=0.2
+        # Llamada al modelo nativo de Google Gemini
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=prompt_sistema
         )
-        return response.choices[0].message.content
+        response = model.generate_content(f"Analiza este contrato:\n\n{texto_legal[:12000]}")
+        return response.text
     except Exception as e:
-        return f"Error al procesar con el motor de IA global: {str(e)}"
+        return f"Error al procesar con el motor de Gemini: {str(e)}"
 
 # Orquestador principal de ejecución
 if uploaded_file:
     if not api_key:
-        st.warning("⚠️ Introduce tu OpenAI API Key en la barra lateral para iniciar la auditoría legal internacional.")
+        st.warning("⚠️ Introduce tu Gemini API Key en la barra lateral para iniciar la auditoría legal.")
     else:
-        with st.spinner(f"🕵️‍♂️ Extrayendo y auditando el contrato bajo el estándar legal seleccionado..."):
+        with st.spinner(f"🕵️‍♂️ Extrayendo y auditando el contrato bajo el estándar de Google Gemini..."):
             texto_contrato = extraer_texto_pdf(uploaded_file)
             
             if texto_contrato and len(texto_contrato.strip()) > 50:
@@ -135,5 +134,4 @@ if uploaded_file:
                 st.divider()
                 st.caption("🔒 **Cómputo Seguro:** Retención Cero activada. El archivo fue purgado de la memoria inmediatamente tras renderizar los resultados.")
             else:
-                st.error("El archivo cargado está vacío o no posee texto legible directo (requiere OCR).")
-
+                st.error("El archivo cargado está vacío o no posee texto legible directo.")
